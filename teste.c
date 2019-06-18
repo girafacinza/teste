@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <locale.h>
 #include <string.h>
-#include <windows.h>
 
 typedef struct
 {
@@ -11,35 +10,50 @@ typedef struct
 	char vetpalavras[3][17];
 	char descpalavras[3][17];
 	char descpalavrasFinal[3][17];
-} Jogo;
+	float premios[12];
+} Linhas;
 
-Jogo ler_jogo(void);
+Linhas ler_linhas(void);
 void ler_premios(float[]);
-float sorteia_premios(float[]);
-int prepara(Jogo*);
-void placar (Jogo,float[], int);
-int verificaLetra (Jogo*, char);
-int verificaPalavra (Jogo);
+float num_sorteio(float[]);
+int prepara(Linhas*);
+void placar (Linhas,float[], int);
+int verificaLetra (Linhas*, char);
+int verificaPalavra (Linhas);
 
 int main(){
-	float placarjogador[3]= {0,0,0}, rodar, premios[12];
-	int i=0, j, totalLetras, acerto, totalAcertos=0, contFinal=0, vencedor=-1;
+	float jogador[3]= {0,0,0}, rodar;
+	int i=0, j, qtd_letras, acerto, qtd_acertos=0, contFinal=0, vencedor=-1,k=0;
 	char letraescolhida;
-	Jogo jogo;
+	Linhas linhas;
 	
-	jogo = ler_jogo();
-	totalLetras = prepara(&jogo);
-	ler_premios(premios);
+	linhas = ler_linhas();
+	qtd_letras = prepara(&linhas);
+
+	FILE *arq;
 	
-	do {
-		placar(jogo,placarjogador,vencedor);	
-		printf("\nJogador %d: Rode a roda!", i+1);
+	arq = fopen("premios.dat", "rb"); // arq é a variavel que retorna a abertura binária do premios.dat 
+	if(arq == NULL) {
+		printf("ERRO AO ABRIR O ARQUIVO!\n");
+		exit(2);
+		}
+	while ( i<12 ){
+		fscanf(arq, "%f\n", &linhas.premios[i]);
+		i++;
+	}
+	
+	fclose(arq); //fechar o arquivo
+	i=0;
+	
+	while ( qtd_letras > qtd_acertos + 3 ) {
+		placar(linhas,jogador,vencedor);	
+		printf("\nJogador %d, Roda a roda!",i+1);
 	  	fflush(stdin);
 		getchar();
-		rodar = sorteia_premios(premios);
+		rodar = num_sorteio(linhas.premios);
 
 		if (rodar == 0){
-			printf("\nPassa a vez!\n");
+			printf("\nPASSOU A VEZ!\n");
 			i = (i+1)%3; //vai para próximo jogador
       		printf("A vez sera passada para o jogador %d.\nPressione qualquer tecla.", i+1);
       		fflush(stdin);
@@ -47,8 +61,8 @@ int main(){
 		}
 	
 		else if(rodar == 0.01f){
-			printf("\nPerdeu tudo!\nPressione qualquer tecla.");
-			placarjogador[i] = 0; //zerar placar do jogador ativo
+			printf("\nPERDEU TUDO!\nPressione qualquer tecla.");
+			jogador[i] = 0; //zerar placar do jogador ativo
 			i = (i+1)%3; //vai para próximo jogador
 			fflush(stdin);
 			getchar(); 
@@ -63,15 +77,15 @@ int main(){
 			
 			if ( letraescolhida >= 'a' && letraescolhida <= 'z') letraescolhida -= 32;
 			
-			acerto = verificaLetra (&jogo, letraescolhida); 
+			acerto = verificaLetra (&linhas, letraescolhida); 
       
 			if (acerto>0) {
-				placarjogador[i] = placarjogador[i] + rodar*acerto;
-				totalAcertos += acerto; //armazena total de caracteres descobertos
-				if ( totalLetras - totalAcertos == 0 ){ //jogador venceu antes da rodada final
+				jogador[i] = jogador[i] + rodar*acerto;
+				qtd_acertos += acerto; //armazena total de caracteres descobertos
+				if ( qtd_letras - qtd_acertos == 0 ){ //jogador venceu antes da rodada final
 							vencedor = i;
 							system("cls");
-							placar (jogo, placarjogador, vencedor );
+							placar (linhas, jogador, vencedor );
 							return 0;
 				}
 			}
@@ -89,28 +103,28 @@ int main(){
 			}
 		}
       	system("cls"); //limpa a tela
-	} while ( totalLetras > totalAcertos + 3 );
+	}
 
-	do{ //rodada final
-	placar(jogo,placarjogador,vencedor);	
-	printf("\nJogador %d: Rode a roda!", i+1);
+	while ( vencedor==-1 && contFinal<3 ){ //rodada final
+	placar(linhas,jogador,vencedor);	
+	printf("\nJogador %d, Roda a roda!",i+1);
 	fflush(stdin);
 	getchar();
-	do		rodar = sorteia_premios(premios); //não aceita 'passa a vez' ou 'perde tudo' na última rodada
+	do		rodar = num_sorteio(linhas.premios); //não aceita 'passa a vez' ou 'perde tudo' na última rodada
 	while 	( rodar == 0.01f || rodar == 0 );
-	printf("\nFalta(m) %d letra(s) para completar a palavra.\n", totalLetras-totalAcertos);
+	printf("\nFalta(m) %d letra(s) para completar a palavra.\n", qtd_letras-qtd_acertos);
 	printf("Voce tem 5 segundos para pensar e depois digitar a palavra...");
 	for(j=5;j!=0; j--){ //contagem regressiva
 		printf("%d...", j);
 		Sleep(1000);
 	} 
-	printf("\n\nValendo R$ %.2f.\n", rodar+placarjogador[i]);
-	acerto = verificaPalavra(jogo);
+	printf("\n\nValendo R$ %.2f, a palavra eh: \n", rodar+jogador[i]);
+	acerto = verificaPalavra(linhas);
 	if (acerto == 1){ //jogador ganhou
 		vencedor = i;
-		placarjogador[i] += rodar;
+		jogador[i] += rodar;
       	system("cls");
-		placar (jogo, placarjogador, vencedor );
+		placar (linhas, jogador, vencedor );
 		return 1;
 	}
 	else{
@@ -118,106 +132,88 @@ int main(){
 		contFinal++;
 	}
     system("cls");
-	} while ( vencedor==-1 && contFinal<3 );
+	}
 	
-	placar (jogo, placarjogador, vencedor );
-	printf("\nFim de jogo! Nao houve vencedor.\n");
-		
-	
+	placar (linhas, jogador, vencedor );
+	printf("\nNinguem acertou! Fim de jogo.\n");
+			
 return 2;
 }
 
-Jogo ler_jogo(void){	
+Linhas ler_linhas(void){	
 	int qtd, i,j, sorteio;
 	char pista[17], vetpalavras[3][17];
-	Jogo jogo[5];
+	Linhas linhas[5];
 	FILE *arq;
-	arq = fopen("PALAVRAS.dat", "r");
+	arq = fopen("palavras.dat", "rb");
 	if (arq == NULL)
 	{
-		printf("\nErro, nao foi possivel abrir o arquivo\n");
+		printf("\nERRO AO ABRIR O ARQUIVO\n");
  		exit(1);
 	}
 	for (j=0;j<5;j++)
 	{
-		if (fscanf(arq,"%16s %d", pista, &qtd) != 2) //primeiro faz a leitura do nome e da quantidade de palavras
+		if (fscanf(arq,"%s %d", pista, &qtd) != 2) //primeiro faz a leitura do nome e da quantidade de palavras
 		{ //se nao conseguiu ler os 2 campos
 			if (feof(arq)) //é fim do arquivo ?
 				printf("* ok, fim de arquivo\n");
 			else
-				printf("\nErro no conteudo do arquivo\n");
+				printf("\nERRO AO ABRIR O ARQUIVO!\n");
 			exit(0);
     	}
 		for (i = 0; i < qtd; i++)
 		{
-			if (fscanf(arq, "%16s", vetpalavras[i]) != 1)
+			if (fscanf(arq, "%s", vetpalavras[i]) != 1)
 			{
-				printf("\nErro no conteudo do arquivo\n");
+				printf("\nERRO AO ABRIR O ARQUIVO!\n");
  				exit(2);
       		}
     	}
-		strcpy(jogo[j].pista, pista);
-		jogo[j].qtd = qtd;
+		strcpy(linhas[j].pista, pista);
+		linhas[j].qtd = qtd;
 		for (i = 0; i < qtd; i++)
-			strcpy(jogo[j].vetpalavras[i], vetpalavras[i]);
+			strcpy(linhas[j].vetpalavras[i], vetpalavras[i]);
 	}
   	srand(time(NULL));
 	sorteio = rand()%5;
 	fclose(arq);
-	return jogo[sorteio];
+	return linhas[sorteio];
 }
 
-void ler_premios(float premios[]){
-	int i=0;
-	FILE *arq;
-	
-	arq = fopen("PREMIOS.dat", "r"); // define arq como o arquivo premio.dat para somente ler
-	if(arq == NULL) {
-		printf("Erro, nao foi possivel abrir o arquivo\n");
-		exit(2);
-		}
-	while ( i<12 ){
-		fscanf(arq, "%f\n", &premios[i]);
-		i++;
-	}
-	
-	fclose(arq);
-}
-
-float sorteia_premios(float premios[]){ 
+float num_sorteio(float premios[]){ 
 	float valor;
 	srand(time(NULL));
 	valor =  premios[rand()%12];
  	return valor;
 }
 
-int prepara(Jogo*jogo){ 
+int prepara(Linhas*linhas){ 
 	int i, j, contagem=0, qtddLetras, qtddPalavras;
-	qtddPalavras = (*jogo).qtd;
+	qtddPalavras = (*linhas).qtd;
 	for (i=0;i<qtddPalavras;i++) { //percorre todas as palavras
-		qtddLetras = strlen((*jogo).vetpalavras[i]);
+		qtddLetras = strlen((*linhas).vetpalavras[i]);
 		for (j=0;j<qtddLetras;j++){ //percorre todas as letras até o tamanho de cada palavra
-			(*jogo).descpalavras[i][j]='_';
+			(*linhas).descpalavras[i][j]='_';
 			contagem++; //conta quantos caracteres existem no total das palavras
 		}
 	}
 	return contagem;
 }
 
-void placar (Jogo jogo, float jog[], int iVencedor ){
+void placar (Linhas linhas, float dinheiro_do_jogador[], int iVencedor ){
 	int i, j;
-	printf("\n\t\tA dica eh: %s\n\n\t\t\t", jogo.pista);
-	for (i=0; i<jogo.qtd; i++) {
-		for (j=0;j<strlen(jogo.vetpalavras[i]);j++){
-			if ( iVencedor == -1 ) printf(" %c ", jogo.descpalavras[i][j]); 
-			else printf(" %c ", jogo.vetpalavras[i][j]); //caso alguem vença, imprime o vetor original
+	printf("\n\t\t\tA palavra esta associada com: %s\n\n\t\t\t", linhas.pista);
+	for (i=0; i<linhas.qtd; i++) {
+		for (j=0;j<strlen(linhas.vetpalavras[i]);j++){
+			if ( iVencedor == -1 ) printf(" %c ", linhas.descpalavras[i][j]); 
+			else printf(" %c ", linhas.vetpalavras[i][j]); //caso alguem vença, imprime o vetor original
 		}
 		printf("\n\t\t\t");
 	}
-	printf("\n\nJogador 01\t\tJogador 02\t\tJogador 03\n");
+	printf("\n\nJogador 1\t\tJogador 2\t\tJogador 3\n");
 	printf("==========\t\t==========\t\t==========\n");
-	printf("R$%8.2f\t\tR$%8.2f\t\tR$%8.2f\n",jog[0],jog[1],jog[2]);
-	switch (iVencedor){ //caso alguém vença o jogo
+	printf("R$%8.2f\t\tR$%8.2f\t\tR$%8.2f\n",dinheiro_do_jogador[0],dinheiro_do_jogador[1],dinheiro_do_jogador[2]);
+	switch (iVencedor){ //caso alguém vença o linhas
 		case 0: printf(" VENCEDOR\n");
 		break;
 		case 1: printf("\t\t\t VENCEDOR\n");
@@ -227,13 +223,13 @@ void placar (Jogo jogo, float jog[], int iVencedor ){
 	}
 }
 
-int verificaLetra (Jogo *jogo, char letra){
+int verificaLetra (Linhas *linhas, char letra){
 	int i, j, acert=0;
-	for (i=0; i<(*jogo).qtd ; i++){ //percorre todas as palavras
-		for (j=0;j<strlen((*jogo).vetpalavras[i]);j++){ //percorre todas as letras até atingir o tamanho da palavra
-    		if ((*jogo).descpalavras[i][j] == letra) return -1; //se a letra já foi descoberta, retorna -1
-			else if ((*jogo).vetpalavras[i][j] == letra ) { //compara letra por letra da palavra original para ver se é igual
-				(*jogo).descpalavras[i][j] = letra; //revela a letra na palavra descoberta
+	for (i=0; i<(*linhas).qtd ; i++){ //percorre todas as palavras
+		for (j=0;j<strlen((*linhas).vetpalavras[i]);j++){ //percorre todas as letras até atingir o tamanho da palavra
+    		if ((*linhas).descpalavras[i][j] == letra) return -1; //se a letra já foi descoberta, retorna -1
+			else if ((*linhas).vetpalavras[i][j] == letra ) { //compara letra por letra da palavra original para ver se é igual
+				(*linhas).descpalavras[i][j] = letra; //revela a letra na palavra descoberta
 				acert++; //contagem para saber quantas letras foram descobertas
 			} 
 		}
@@ -241,16 +237,16 @@ int verificaLetra (Jogo *jogo, char letra){
   return acert;
 }
 
-int verificaPalavra (Jogo jogo){
+int verificaPalavra (Linhas linhas){
 	int i, verif, acert=0;
 	char palavrasFinal[3][17];
-	for ( i=0 ; i<jogo.qtd ; i++ ){
+	for ( i=0 ; i<linhas.qtd ; i++ ){
 		printf("A palavra %d eh: ", i+1);
 		fflush(stdin);
 		gets(palavrasFinal[i]);
-		verif = strcmp ( strupr(palavrasFinal[i]),jogo.vetpalavras[i] );
+		verif = strcmp ( strupr(palavrasFinal[i]),linhas.vetpalavras[i] );
 		if ( verif == 0 ) acert++;
 	}
-	if ( acert == jogo.qtd ) return 1;
+	if ( acert == linhas.qtd ) return 1;
 	else return 0;
 }
